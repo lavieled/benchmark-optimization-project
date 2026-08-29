@@ -1,5 +1,5 @@
 """
-Optimized n-body
+Optimized n-body (same 5-body pyperformance physics).
 
 Numba JIT + SoA float64 arrays. Inner mag is dt / r^3 via 1/sqrt.
 Same BODIES constants, dt, default iterations, and energy.
@@ -57,13 +57,11 @@ BODIES = {
 NAMES = ('sun', 'jupiter', 'saturn', 'uranus', 'neptune')
 SYSTEM = list(BODIES.values())
 N = len(NAMES)
-# integer pair list; no nested Python tuples in the hot loop
 PAIRS_NP = np.array(
     [(i, j) for i in range(N) for j in range(i + 1, N)],
     dtype=np.int32,
 )
 
-# SoA: one array per field, better for Numba than [pos, vel, mass] lists
 px = np.zeros(N, dtype=np.float64)
 py = np.zeros(N, dtype=np.float64)
 pz = np.zeros(N, dtype=np.float64)
@@ -88,7 +86,7 @@ def load_initial():
 load_initial()
 
 
-@njit  # compile to machine code; skip CPython pair-loop overhead
+@njit
 def _advance(dt, n, px, py, pz, vx, vy, vz, mass, pairs):
     n_pairs = pairs.shape[0]
     nbody = px.shape[0]
@@ -99,8 +97,8 @@ def _advance(dt, n, px, py, pz, vx, vy, vz, mass, pairs):
             dx = px[i] - px[j]
             dy = py[i] - py[j]
             dz = pz[i] - pz[j]
-            inv = 1.0 / math.sqrt(dx * dx + dy * dy + dz * dz)  # 1/r
-            mag = dt * inv * inv * inv  # dt/r^3 instead of r2 ** -1.5
+            inv = 1.0 / math.sqrt(dx * dx + dy * dy + dz * dz)
+            mag = dt * inv * inv * inv
             b1m = mass[i] * mag
             b2m = mass[j] * mag
             vx[i] -= dx * b2m
@@ -115,7 +113,7 @@ def _advance(dt, n, px, py, pz, vx, vy, vz, mass, pairs):
             pz[k] += dt * vz[k]
 
 
-@njit  # same kernel as original report_energy, compiled
+@njit
 def _energy(px, py, pz, vx, vy, vz, mass, pairs):
     e = 0.0
     n_pairs = pairs.shape[0]
@@ -160,7 +158,7 @@ def offset_momentum(ref, bodies=None, px_acc=0.0, py_acc=0.0, pz_acc=0.0):
     vz[idx] = pz_acc / m
 
 
-# compile once here so pyperf does not pay JIT time
+# Compile JIT before timing (throwaway buffers).
 def _warmup():
     pxw = np.arange(N, dtype=np.float64)
     pyw = np.arange(N, dtype=np.float64) * 0.5
