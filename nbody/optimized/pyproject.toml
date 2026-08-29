@@ -1,0 +1,9 @@
+[project]
+name = "pyperformance_bm_nbody_optimized"
+requires-python = ">=3.8"
+dependencies = ["pyperf", "numpy", "numba"]
+dynamic = ["version"]
+
+[tool.pyperformance]
+name = "nbody_optimized"
+tags = "math"
