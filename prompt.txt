@@ -1,0 +1,34 @@
+AI tool prompts / instructions used on this project
+====================================================
+Tool: Cursor agent (Grok), ChatGPT-style coding assistant
+Course: Technion HW/SW co-design — pyperformance nbody + raytrace
+
+---
+
+1) Repo setup
+- "open new folder and repo named benchmark-optimization-project"
+- "we chose nbody and raytrace / im doing nbody"
+- "make sure to use the python benchmark program as base, nbody_impl file from other course is possible reference but not a final version"
+- "yes create a plan and show it to me for approval - when not sure ask"
+- "go" (create local layout + gitignore only)
+- "just put the original benchmark file there" + pyperformance nbody and raytrace URLs
+- "make gitignore minimal and simple"
+- "yes can commit - msg open project repo added original benchmarks"
+- "yes" (create private GitHub repo and push)
+- "great now open branch called lavie_nbody and switch to it"
+
+2) Nbody implementation plan
+- Pasted full course spec (pyperformance venv guide, analysis, flame graphs, >=7% opt, Verilog HW, git deliverables, AI prompt log)
+- "Implement the plan as specified" on lavie_nbody: README, script_nbody.sh, report_nbody.txt, optimized Python (SoA + 1/sqrt^3), Verilog force unit
+
+3) Constraints given to the assistant
+- Do not replace the benchmark with C++/AVX2/TBB from concurrent-course nbody_impl.h
+- Optimize the pyperformance 5-body Python program
+- Leave raytrace for the partner
+- Ask before git commit/push; never add the agent as collaborator or Co-authored-by
+- Private repo on lavieled; GitHub name benchmark-optimization-project
+
+4) Sources pointed at
+- https://github.com/python/pyperformance/blob/main/pyperformance/data-files/benchmarks/bm_nbody/run_benchmark.py
+- https://github.com/python/pyperformance/tree/main/pyperformance/data-files/benchmarks/bm_raytrace
+- https://pyperformance.readthedocs.io/benchmarks.html
