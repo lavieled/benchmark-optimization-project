@@ -1,0 +1,8 @@
+__pycache__/
+.venv/
+*.pdf
+*.zip
+*.perf.data
+*.img
+.DS_Store
+.env
