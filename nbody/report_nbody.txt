@@ -1,0 +1,257 @@
+===============================================================================
+                       BENCHMARK OPTIMIZATION REPORT
+              Python Interpreter Overhead Reduction: bm_nbody
+===============================================================================
+
+1. BENCHMARK ANALYSIS
+-------------------------------------------------------------------------------
+This report covers the pyperformance n-body benchmark (bm_nbody). The
+original program is nbody/run_benchmark.py.
+
+The workload is a tiny solar system: the sun plus Jupiter, Saturn, Uranus,
+and Neptune. Each timed run does three things: print the total energy,
+take 20,000 Euler steps with dt = 0.01, then print the energy again.
+
+The original code uses only the Python standard library plus pyperf. There
+is no NumPy. Bodies live in a dictionary. Each body is a position list, a
+velocity list, and a mass. There are five bodies, so ten unique pairs.
+
+The hot function is advance(). For every pair it computes the distance
+components and r2, then
+
+    mag = dt * r2 ** (-1.5)
+
+which is the same as dt / r^3. That scale is used to update both
+velocities (the "kick"). After all pairs, it updates positions.
+
+report_energy() adds kinetic energy and pairwise potential. Before the
+run, offset_momentum() zeros the system's total momentum, using the sun
+as the reference body.
+
+With only five bodies, this is not a cache or SIMD problem. Almost all
+time is Python itself: bytecode, boxed floats, and reading or writing
+small lists.
+
+
+2. UNDERSTANDING PYPERFORMANCE & PROFILING METHODOLOGY
+-------------------------------------------------------------------------------
+All official numbers come from an Ubuntu QEMU guest running CPython
+3.10.12. Stack traces for the original used the course debug build
+(python3-dbg). Timing always used regular python3. A debug interpreter
+is slower on purpose, so it must not be used for the speedup claim.
+
+We ran pyperf with -w1 -n3 -p1 and 20,000 iterations on both versions.
+The raw samples are in nbody_original.json and nbody_optimized.json.
+python3 -m pyperf compare_to produced nbody_compare.txt.
+
+We also recorded Linux perf at 999 Hz with call graphs. The original
+used python3-dbg. The optimized run used regular python3, because Numba
+does not work under python3-dbg.
+
+We did not collect perf stat hardware counters (instructions, cycles,
+cache misses). The evidence here is pyperf, perf report, and the flame
+graphs.
+
+
+3. FLAME GRAPH & PROFILING ANALYSIS METHODOLOGY
+-------------------------------------------------------------------------------
+Call stacks were sampled like this:
+
+    perf record -F 999 -g -- python3-dbg -u nbody/run_benchmark.py
+
+Brendan Gregg's FlameGraph scripts turned that into SVG:
+
+    perf script | stackcollapse-perf.pl | flamegraph.pl > nbody_baseline.svg
+
+The optimized side used the same steps on regular python3
+(nbody_optimized.svg and nbody_optimized_perf_report.txt).
+
+Flame graphs are a good map of "where time went in this run," but each
+picture is scaled to 100% of that run. After the JIT, the program is
+tens of times faster, so a wide bar on the new graph is not comparable
+to a wide bar on the old one. The optimized recording also catches some
+Numba/LLVM compile time (libllvmlite.so). A warmed pyperf run does not
+include that.
+
+So the official speedup is the pyperf mean and standard deviation.
+perf report on python3.10d tells us the original bottleneck. The
+optimized flame graph is supporting evidence that work moved out of
+the interpreter, not a second official timer.
+
+
+4. DETECTED BOTTLENECKS FROM BASELINE PERF REPORT
+-------------------------------------------------------------------------------
+The baseline report is nbody/results/nbody_perf_report.txt (about 27,000
+samples on python3.10d). The top costs are interpreter overhead, not
+gravity math.
+
+  1. The bytecode loop
+     _PyEval_EvalFrameDefault took 24.27% of samples by itself. That is
+     CPython walking bytecode for advance() and report_energy(). It is
+     the largest single item.
+
+  2. Boxed floats and arithmetic wrappers
+     Every multiply, add, or ** builds a new Python float. PyFloat_FromDouble
+     is 4.62%. Around each operation sit C helpers such as binary_op1
+     (2.43%), PyNumber_Multiply (1.06%), and PyNumber_AsSsize_t (2.24%).
+     The actual floating-point helpers (binary_op1, float_mul, float_add)
+     add up to only 4.63%. Most samples are scaffolding, not FLOPs.
+
+  3. Short-lived objects and list traffic
+     _Py_Dealloc (2.89%) is tearing down those temporary floats.
+     list_subscript (1.57%), list_ass_subscript (1.31%), and
+     list_ass_item (0.74%) are reading and writing [x, y, z] on every
+     pair.
+
+  4. Why this kernel is expensive in Python
+     mag = dt * r2 ** (-1.5) is one power and some list math, done
+     20,000 * 10 times, all in the interpreter. Five bodies is too
+     small for cache or SIMD to matter.
+
+
+5. IMPLEMENTED OPTIMIZATION IMPROVEMENTS
+-------------------------------------------------------------------------------
+The optimized program is nbody/optimized/run_benchmark.py. It keeps the
+same five bodies, the same dt, the same step count, and the same energy.
+verify_energy.py checks that.
+
+We first tried staying in pure CPython: math.sqrt instead of **, and a
+structure-of-arrays layout without JIT. Those were slower, or only about
+3% faster. The version we ship does three things together:
+
+  1. Structure of arrays
+     Instead of nested Python lists, each field is a float64 NumPy array
+     (px, py, pz, vx, vy, vz, mass). Pairs are an integer table
+     (PAIRS_NP), so the hot loop does not walk Python tuples.
+
+  2. A cheaper way to compute mag
+     We still compute dt / r^3, but as
+
+         inv = 1 / sqrt(r2)
+         mag = dt * inv * inv * inv
+
+     instead of r2 ** (-1.5).
+
+  3. Numba JIT
+     _advance and _energy are compiled with @njit. The JIT is warmed
+     once at import, so the pyperf numbers do not include compile time.
+     script_nbody.sh installs numpy and numba.
+
+
+6. PERFORMANCE IMPROVEMENTS & MULTI-METRIC VALIDATION
+-------------------------------------------------------------------------------
+
+[A] Statistical Execution Metrics (pyperf Output Analysis)
+-------------------------------------------------------------------------------
+Same guest as above: Ubuntu, CPython 3.10.12, QEMU CPU.
+pyperf -w1 -n3 -p1, 20,000 iterations.
+Files: nbody/results/nbody_compare.txt and the two JSON files.
+
+Metric                    | Baseline (pyperf)   | Optimized (pyperf)  | Improvement
+--------------------------|---------------------|---------------------|-----------
+Minimum Time (Best Case)  | 3.573 sec           | 63.9 ms             | 55.9x
+Maximum Time (Worst Case) | 3.955 sec           | 64.4 ms             | 61.4x
+Standard Deviation (stdev)| 0.22 sec            | 0.3 ms              | -99.9%
+Coefficient of Var (CV)   | 5.9%                | 0.47%               | Stable
+Mean Speedup Ratio        | 1.00x               | 57.82x FASTER       | -98.3% time
+-------------------------------------------------------------------------------
+
+The mean went from 3.71 s +- 0.22 s to 64.1 ms +- 0.3 ms (57.82x). The
+course asks for at least 7%.
+
+The coefficient of variation dropped from 5.9% to 0.47%. That matches a
+compiled kernel: we no longer allocate millions of temporary Python
+floats, so the heap and GC stop adding noise.
+
+Use the pyperf comparison as the official time. A one-shot perf recording
+still pays some JIT and is not the number to quote.
+
+[B] Quantitative Proof of Optimization (Baseline vs. Optimized perf report)
+-------------------------------------------------------------------------------
+1. Less time in the interpreter
+   _PyEval_EvalFrameDefault went from 24.27% self on python3-dbg to
+   14.68% self on regular python3 + Numba. A large part of the useful
+   work is no longer running as bytecode.
+
+2. Work moved into compiled code
+   The interesting symbols on the optimized side are in libllvmlite.so
+   (Numba's LLVM), not PyFloat_FromDouble, binary_op1, or list stores.
+   The pairwise kernel left CPython object operations.
+
+   These two profiles are not the same binary (debug Python vs regular
+   Python), so the percentages should be read as a shift, not as a
+   precise apples-to-apples delta.
+
+[C] Correctness (energy)
+-------------------------------------------------------------------------------
+verify_energy.py compares the two programs after the momentum offset and
+after 1,000 steps. They must stay within 1e-9.
+
+  after offset:     same energy, difference = 0
+  after 1,000 steps: difference = 3.89e-16
+
+Same physics. The speedup is the implementation, not a different
+integrator.
+
+
+7. HARDWARE ACCELERATION PROPOSAL
+-------------------------------------------------------------------------------
+The useful floating-point work is the pairwise kick:
+
+    mag = dt / r^3
+    v1 -= dr * m2 * mag
+    v2 += dr * m1 * mag
+
+Software optimization mostly removes CPython. Fast reciprocal square
+root and fused multiply-add are general floating-point ops, not unique
+to n-body. With only five bodies, a custom block helps if software can
+call it cheaply (from C), or if N becomes much larger.
+
+The SystemVerilog unit is nbody/hw/nbody_force.sv. It takes one pair,
+forms r2, seeds a Quake-style reciprocal square root, runs two Newton
+steps, builds inv^3, then writes both velocity increments. Ports are
+float32 with valid/ready handshakes. shortreal stands in for a real
+floating-point unit.
+
+Assumed clock is about 200 MHz:
+
+  inputs:  clk, rst_n, in_valid/ready, dx, dy, dz, m1, m2, dt
+  outputs: out_valid/ready, dv1{x,y,z}, dv2{x,y,z}
+
+After a pair is accepted, the datapath takes 8 cycles (~40 ns). Ten
+pairs per step would be about 0.4 us if they were streamed. A single
+MMIO write per pair would spend most of that time on the call, not on
+arithmetic, unless there is DMA or a custom instruction.
+
+Two software uses:
+  (A) MMIO, one pair at a time.
+  (B) New ISA ops (FRSQRT and FMADD) inside a C loop. That helps other
+      floating-point kernels too, not only n-body.
+
+                    +------------------+
+   advance()        |  CPU / optional FPU
+                    +--------+---------+
+                             | MMIO / custom ops
+                             v
+              +--------------+---------------+
+              |         nbody_force          |
+              |  r2 -> rsqrt/Newton -> inv3  |
+              |  mag * m, dr -> dv1, dv2     |
+              +------------------------------+
+
+Trade-offs: another Newton iteration costs area and buys accuracy;
+SIMD means more ALUs; a higher clock needs more pipeline stages and
+power. MMIO for N = 5 is mostly overhead. C plus FRSQRT might be
+10-50x versus CPython. Versus Numba the gain is small until N grows.
+
+
+Conclusion
+-------------------------------------------------------------------------------
+We kept the same energy and the same 5-body problem. Structure of
+arrays, a 1/sqrt^3 form of mag, and Numba turned a 3.71 s QEMU run
+into 64.1 ms (57.82x), well above the 7% bar.
+
+The original profile is the CPython eval loop and boxed floats. The
+optimized profile shows less interpreter time and LLVM. The Verilog
+block is that same pairwise 1/r^3 kick, moved into hardware.
+===============================================================================
