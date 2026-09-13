@@ -1,5 +1,1 @@
-LOCAL_PREVIEW (in-process, not QEMU pyperf)
-loops=3 iterations=20000
-original:  0.870119 s
-optimized: 0.013131 s
-improvement: 98.5%
+Mean +- std dev: [nbody_original] 3.71 sec +- 0.22 sec -> [nbody_optimized] 64.1 ms +- 0.3 ms: 57.82x faster

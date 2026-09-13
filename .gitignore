@@ -1,5 +1,7 @@
 __pycache__/
 .venv/
+.venv-dbg/
+nbody/tools/
 *.pdf
 *.zip
 *.perf.data

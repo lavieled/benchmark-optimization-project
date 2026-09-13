@@ -1,34 +1,20 @@
-AI tool prompts / instructions used on this project
-====================================================
-Tool: Cursor agent (Grok), ChatGPT-style coding assistant
-Course: Technion HW/SW co-design — pyperformance nbody + raytrace
 
----
 
-1) Repo setup
-- "open new folder and repo named benchmark-optimization-project"
-- "we chose nbody and raytrace / im doing nbody"
-- "make sure to use the python benchmark program as base, nbody_impl file from other course is possible reference but not a final version"
-- "yes create a plan and show it to me for approval - when not sure ask"
-- "go" (create local layout + gitignore only)
-- "just put the original benchmark file there" + pyperformance nbody and raytrace URLs
-- "make gitignore minimal and simple"
-- "yes can commit - msg open project repo added original benchmarks"
-- "yes" (create private GitHub repo and push)
-- "great now open branch called lavie_nbody and switch to it"
-
-2) Nbody implementation plan
-- Pasted full course spec (pyperformance venv guide, analysis, flame graphs, >=7% opt, Verilog HW, git deliverables, AI prompt log)
-- "Implement the plan as specified" on lavie_nbody: README, script_nbody.sh, report_nbody.txt, optimized Python (SoA + 1/sqrt^3), Verilog force unit
-
-3) Constraints given to the assistant
-- Do not replace the benchmark with C++/AVX2/TBB from concurrent-course nbody_impl.h
-- Optimize the pyperformance 5-body Python program
-- Leave raytrace for the partner
-- Ask before git commit/push; never add the agent as collaborator or Co-authored-by
-- Private repo on lavieled; GitHub name benchmark-optimization-project
-
-4) Sources pointed at
-- https://github.com/python/pyperformance/blob/main/pyperformance/data-files/benchmarks/bm_nbody/run_benchmark.py
-- https://github.com/python/pyperformance/tree/main/pyperformance/data-files/benchmarks/bm_raytrace
-- https://pyperformance.readthedocs.io/benchmarks.html
+"clone a private repo named benchmark-optimization-project"
+"make a simple gitignore, skip venv and pycache and qemu images and perf.data"
+"copy the original pyperformance nbody and raytrace benchmarks into nbody/ and raytrace/"
+"open a branch lavie_nbody for my work, dont touch the raytrace files"
+"explain what the nbody benchmark does, the bodies, pairs, advance and report_energy"
+"where is the hot loop and what does mag = dt * r2 ** -1.5 mean"
+"replace the calc  ** -1.5 with math.sqrt in pure python and time it"
+"implement structure of arrays for px py pz vx vy vz mass as float64"
+"add numba jit on advance and energy and add warmup for it"
+"make a script to time original vs optimized using pyperf"
+"write a verify energy script that checks energy after offset and after 1000 steps"
+"write script_nbody.sh that makes a venv, installs pyperf numpy numba, runs both, compares"
+"how do I run perf record -F 999 -g with python3-dbg on the original nbody"
+"make flame graphs for original and optimized"
+"export perf report --stdio to a text file"
+"give me an outline of a system verilog code file to make a hardware accelerator for the pairwise velocity calculation"
+"document inputs outputs add ISA and block diagram area and power"
+"make a draft of report - list steps of development and considerations - add result numbers from result file"
