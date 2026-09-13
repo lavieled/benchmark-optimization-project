@@ -1,0 +1,1 @@
+Mean +- std dev: [nbody_original] 3.71 sec +- 0.22 sec -> [nbody_cpython] 2.49 sec +- 0.01 sec: 1.49x faster

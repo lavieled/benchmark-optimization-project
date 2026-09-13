@@ -1,20 +1,32 @@
-
-
 "clone a private repo named benchmark-optimization-project"
 "make a simple gitignore, skip venv and pycache and qemu images and perf.data"
 "copy the original pyperformance nbody and raytrace benchmarks into nbody/ and raytrace/"
 "open a branch lavie_nbody for my work, dont touch the raytrace files"
 "explain what the nbody benchmark does, the bodies, pairs, advance and report_energy"
 "where is the hot loop and what does mag = dt * r2 ** -1.5 mean"
-"replace the calc  ** -1.5 with math.sqrt in pure python and time it"
+"how do I run the nbody bench with pyperf and save json"
+"how do I run perf record -F 999 -g with python3-dbg on the original nbody"
+"export perf report --stdio to a text file"
+"make a flame graph from that perf data"
+
+"replace the calc ** -1.5 with math.sqrt in pure python and time it"
+"implement structure of arrays for the hot loop"
+"add a CPython-only nbody with unrolled locals and sqrt"
+"write a verify energy script that checks energy after offset and after 1000 steps"
+
+"make a script to time original vs optimized using pyperf"
+"write script_nbody.sh that makes a venv, installs pyperf, runs both, compares"
+"dont overwrite the first results, add a second copy for the cpython version"
+"run perf record -F 999 -g with python3-dbg on optimized_cpython and make a flame graph"
+"update the report tables with qemu 3.71s to 2.49s 1.49x"
+
 "implement structure of arrays for px py pz vx vy vz mass as float64"
 "add numba jit on advance and energy and add warmup for it"
-"make a script to time original vs optimized using pyperf"
-"write a verify energy script that checks energy after offset and after 1000 steps"
-"write script_nbody.sh that makes a venv, installs pyperf numpy numba, runs both, compares"
-"how do I run perf record -F 999 -g with python3-dbg on the original nbody"
-"make flame graphs for original and optimized"
-"export perf report --stdio to a text file"
+"make flame graphs for the numba version too"
+"make cpython the main optimization in the readme and report, numba is bonus"
+
 "give me an outline of a system verilog code file to make a hardware accelerator for the pairwise velocity calculation"
 "document inputs outputs add ISA and block diagram area and power"
+
 "make a draft of report - list steps of development and considerations - add result numbers from result file"
+"list propmts used for this project"

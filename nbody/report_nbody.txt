@@ -36,21 +36,23 @@ small lists.
 2. UNDERSTANDING PYPERFORMANCE & PROFILING METHODOLOGY
 -------------------------------------------------------------------------------
 All official numbers come from an Ubuntu QEMU guest running CPython
-3.10.12. Stack traces for the original used the course debug build
-(python3-dbg). Timing always used regular python3. A debug interpreter
-is slower on purpose, so it must not be used for the speedup claim.
+3.10.12. Stack traces used the course debug build (python3-dbg) for the
+original and for the main (CPython) optimized program. Timing always
+used regular python3. A debug interpreter is slower on purpose, so it
+must not be used for the speedup claim.
 
-We ran pyperf with -w1 -n3 -p1 and 20,000 iterations on both versions.
-The raw samples are in nbody_original.json and nbody_optimized.json.
-python3 -m pyperf compare_to produced nbody_compare.txt.
+We ran pyperf with -w1 -n3 -p1 and 20,000 iterations.
+Main compare: nbody_original.json vs nbody_cpython.json
+              -> nbody_cpython_compare.txt
+Bonus (Numba): nbody_optimized.json -> nbody_compare.txt
 
-We also recorded Linux perf at 999 Hz with call graphs. The original
-used python3-dbg. The optimized run used regular python3, because Numba
-does not work under python3-dbg.
+Linux perf at 999 Hz with call graphs:
+  original:  python3-dbg  -> nbody_baseline.svg, nbody_perf_report.txt
+  main opt:  python3-dbg  -> nbody_cpython.svg, nbody_cpython_perf_report.txt
+  bonus:     regular python3 (Numba cannot run under python3-dbg)
 
-We did not collect perf stat hardware counters (instructions, cycles,
-cache misses). The evidence here is pyperf, perf report, and the flame
-graphs.
+We did not collect perf stat hardware counters. Evidence is pyperf,
+perf report, and the flame graphs.
 
 
 3. FLAME GRAPH & PROFILING ANALYSIS METHODOLOGY
@@ -63,20 +65,15 @@ Brendan Gregg's FlameGraph scripts turned that into SVG:
 
     perf script | stackcollapse-perf.pl | flamegraph.pl > nbody_baseline.svg
 
-The optimized side used the same steps on regular python3
-(nbody_optimized.svg and nbody_optimized_perf_report.txt).
+The main optimized program used the same python3-dbg pipeline
+(nbody_cpython.svg). Both sides are the same debug interpreter, so
+symbol percentages can be compared.
 
-Flame graphs are a good map of "where time went in this run," but each
-picture is scaled to 100% of that run. After the JIT, the program is
-tens of times faster, so a wide bar on the new graph is not comparable
-to a wide bar on the old one. The optimized recording also catches some
-Numba/LLVM compile time (libllvmlite.so). A warmed pyperf run does not
-include that.
-
-So the official speedup is the pyperf mean and standard deviation.
-perf report on python3.10d tells us the original bottleneck. The
-optimized flame graph is supporting evidence that work moved out of
-the interpreter, not a second official timer.
+Flame graphs scale each run to 100% of that run. After a large JIT
+win, bar widths are not comparable across pictures. The official
+speedup is always pyperf mean and standard deviation. perf report
+explains why the CPython rewrite is faster (less list traffic, no
+pair iterator) and why Numba is a different kind of win (LLVM).
 
 
 4. DETECTED BOTTLENECKS FROM BASELINE PERF REPORT
@@ -111,84 +108,81 @@ gravity math.
 
 5. IMPLEMENTED OPTIMIZATION IMPROVEMENTS
 -------------------------------------------------------------------------------
-The optimized program is nbody/optimized/run_benchmark.py. It keeps the
-same five bodies, the same dt, the same step count, and the same energy.
-verify_energy.py checks that.
+Same five bodies, dt, step count, and energy. verify_energy.py checks
+the original against both optimized programs.
 
-We first tried staying in pure CPython: math.sqrt instead of **, and a
-structure-of-arrays layout without JIT. Those were slower, or only about
-3% faster. The version we ship does three things together:
+Main optimization (stays in CPython): nbody/optimized_cpython.py
 
-  1. Structure of arrays
-     Instead of nested Python lists, each field is a float64 NumPy array
-     (px, py, pz, vx, vy, vz, mass). Pairs are an integer table
-     (PAIRS_NP), so the hot loop does not walk Python tuples.
+  Replacing ** with sqrt alone, or a SoA of Python lists, was slower
+  or about 3%. What works at N=5 is the usual Benchmarks Game layout:
 
-  2. A cheaper way to compute mag
-     We still compute dt / r^3, but as
+    1. Unroll the 10 pairs. No pair iterator, no nested unpack per step.
+    2. Keep x/y/z/vx/vy/vz in local variables for the whole advance().
+    3. mag = dt / (r2 * sqrt(r2)) instead of r2 ** (-1.5).
 
-         inv = 1 / sqrt(r2)
-         mag = dt * inv * inv * inv
+  No NumPy, no Numba. This is the submitted "we still measure the
+  interpreter" result, same class of change as the raytrace refactor.
 
-     instead of r2 ** (-1.5).
+Bonus (leaves the interpreter): nbody/optimized/run_benchmark.py
 
-  3. Numba JIT
-     _advance and _energy are compiled with @njit. The JIT is warmed
-     once at import, so the pyperf numbers do not include compile time.
-     script_nbody.sh installs numpy and numba.
+  Structure-of-arrays float64 arrays, mag = dt * inv^3, Numba @njit
+  on _advance and _energy, JIT warmed at import. Use this if a much
+  larger speedup is allowed. script_nbody.sh can install numpy/numba
+  and compare it without overwriting the CPython result files
+  (ONLY_CPYTHON=1).
 
 
 6. PERFORMANCE IMPROVEMENTS & MULTI-METRIC VALIDATION
 -------------------------------------------------------------------------------
 
-[A] Statistical Execution Metrics (pyperf Output Analysis)
+[A] Main result — CPython only (pyperf)
 -------------------------------------------------------------------------------
-Same guest as above: Ubuntu, CPython 3.10.12, QEMU CPU.
+Guest: Ubuntu, CPython 3.10.12, QEMU CPU.
 pyperf -w1 -n3 -p1, 20,000 iterations.
-Files: nbody/results/nbody_compare.txt and the two JSON files.
+File: nbody/results/nbody_cpython_compare.txt
 
-Metric                    | Baseline (pyperf)   | Optimized (pyperf)  | Improvement
+Metric                    | Baseline            | CPython opt         | Improvement
 --------------------------|---------------------|---------------------|-----------
-Minimum Time (Best Case)  | 3.573 sec           | 63.9 ms             | 55.9x
-Maximum Time (Worst Case) | 3.955 sec           | 64.4 ms             | 61.4x
-Standard Deviation (stdev)| 0.22 sec            | 0.3 ms              | -99.9%
-Coefficient of Var (CV)   | 5.9%                | 0.47%               | Stable
-Mean Speedup Ratio        | 1.00x               | 57.82x FASTER       | -98.3% time
+Minimum Time (Best Case)  | 3.573 sec           | 2.482 sec           | 1.44x
+Maximum Time (Worst Case) | 3.955 sec           | 2.493 sec           | 1.59x
+Standard Deviation (stdev)| 0.22 sec            | 0.01 sec            | -95%
+Coefficient of Var (CV)   | 5.9%                | 0.40%               | Stable
+Mean Speedup Ratio        | 1.00x               | 1.49x FASTER        | -32.9% time
 -------------------------------------------------------------------------------
 
-The mean went from 3.71 s +- 0.22 s to 64.1 ms +- 0.3 ms (57.82x). The
-course asks for at least 7%.
+Mean 3.71 s +- 0.22 s -> 2.49 s +- 0.01 s (1.49x). The course asks for
+at least 7%. This path never leaves CPython.
 
-The coefficient of variation dropped from 5.9% to 0.47%. That matches a
-compiled kernel: we no longer allocate millions of temporary Python
-floats, so the heap and GC stop adding noise.
-
-Use the pyperf comparison as the official time. A one-shot perf recording
-still pays some JIT and is not the number to quote.
-
-[B] Quantitative Proof of Optimization (Baseline vs. Optimized perf report)
+[B] Main result — same python3-dbg, baseline vs CPython opt
 -------------------------------------------------------------------------------
-1. Less time in the interpreter
-   _PyEval_EvalFrameDefault went from 24.27% self on python3-dbg to
-   14.68% self on regular python3 + Numba. A large part of the useful
-   work is no longer running as bytecode.
+nbody_perf_report.txt vs nbody_cpython_perf_report.txt (both python3.10d).
 
-2. Work moved into compiled code
-   The interesting symbols on the optimized side are in libllvmlite.so
-   (Numba's LLVM), not PyFloat_FromDouble, binary_op1, or list stores.
-   The pairwise kernel left CPython object operations.
+  _PyEval_EvalFrameDefault: 24.27% self -> 19.77% self
+  list_subscript:           1.57% -> 0.01%
+  list_ass_subscript:       1.31% -> 0.01%
+  list_ass_item:            0.74% -> ~0%
 
-   These two profiles are not the same binary (debug Python vs regular
-   Python), so the percentages should be read as a shift, not as a
-   precise apples-to-apples delta.
+Locals plus an unrolled pair list removed almost all [x,y,z] traffic.
+The eval loop is still the top symbol (we are still in bytecode), but
+wall time dropped 33%, which matches fewer SUBSCR / iterator ops.
+Flame graphs: nbody_baseline.svg and nbody_cpython.svg.
 
-[C] Correctness (energy)
+[C] Bonus — Numba (optional)
 -------------------------------------------------------------------------------
-verify_energy.py compares the two programs after the momentum offset and
-after 1,000 steps. They must stay within 1e-9.
+File: nbody/results/nbody_compare.txt
+Mean 3.71 s +- 0.22 s -> 64.1 ms +- 0.3 ms (57.82x).
 
-  after offset:     same energy, difference = 0
-  after 1,000 steps: difference = 3.89e-16
+This compiles the pair loop. The bonus flame graph
+(nbody_optimized.svg) is regular python3, not python3-dbg, and shows
+libllvmlite.so. Quote pyperf, not that one-shot recording (it still
+pays some JIT). Staff can ignore this path if a JIT is out of scope.
+
+[D] Correctness (energy)
+-------------------------------------------------------------------------------
+verify_energy.py, 1,000 steps, |d| < 1e-9:
+
+  after offset:      original = CPython = Numba (CPython |d| ~ 3e-17)
+  after 1,000 steps: |d| ~ 3e-16 (both optimized programs)
 
 Same physics. The speedup is the implementation, not a different
 integrator.
@@ -202,10 +196,10 @@ The useful floating-point work is the pairwise kick:
     v1 -= dr * m2 * mag
     v2 += dr * m1 * mag
 
-Software optimization mostly removes CPython. Fast reciprocal square
-root and fused multiply-add are general floating-point ops, not unique
-to n-body. With only five bodies, a custom block helps if software can
-call it cheaply (from C), or if N becomes much larger.
+The CPython rewrite only removes interpreter work. Fast reciprocal
+square root and fused multiply-add are general floating-point ops.
+With only five bodies, a custom block helps if software can call it
+cheaply (from C), or if N becomes much larger.
 
 The SystemVerilog unit is nbody/hw/nbody_force.sv. It takes one pair,
 forms r2, seeds a Quake-style reciprocal square root, runs two Newton
@@ -242,16 +236,17 @@ Two software uses:
 Trade-offs: another Newton iteration costs area and buys accuracy;
 SIMD means more ALUs; a higher clock needs more pipeline stages and
 power. MMIO for N = 5 is mostly overhead. C plus FRSQRT might be
-10-50x versus CPython. Versus Numba the gain is small until N grows.
+10-50x versus CPython. Versus the Numba bonus the gain is small until
+N grows.
 
 
 Conclusion
 -------------------------------------------------------------------------------
-We kept the same energy and the same 5-body problem. Structure of
-arrays, a 1/sqrt^3 form of mag, and Numba turned a 3.71 s QEMU run
-into 64.1 ms (57.82x), well above the 7% bar.
+Same 5-body problem and the same energy. The main result stays in
+CPython: unroll, locals, and dt/(r2*sqrt(r2)) turn 3.71 s into 2.49 s
+on QEMU (1.49x), above the 7% bar. python3-dbg shows list subscript
+traffic essentially gone.
 
-The original profile is the CPython eval loop and boxed floats. The
-optimized profile shows less interpreter time and LLVM. The Verilog
-block is that same pairwise 1/r^3 kick, moved into hardware.
+Numba is a bonus (57.82x) if compiled kernels are allowed. The Verilog
+block is the same pairwise 1/r^3 kick in hardware.
 ===============================================================================

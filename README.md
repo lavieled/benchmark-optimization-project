@@ -2,10 +2,12 @@
 
 Analyze, profile, and optimize two [pyperformance](https://pyperformance.readthedocs.io/benchmarks.html) benchmarks, then propose hardware acceleration.
 
-| Benchmark | Speedup | Report | Evidence | Hardware |
-|-----------|---------|--------|----------|----------|
-| [nbody](nbody/) | 57.82× | [report_nbody.txt](nbody/report_nbody.txt) | [results/](nbody/results/) | [nbody_force.sv](nbody/hw/nbody_force.sv) |
+| Benchmark | Main speedup | Report | Evidence | Hardware |
+|-----------|--------------|--------|----------|----------|
+| [nbody](nbody/) | **1.49×** (CPython) | [report_nbody.txt](nbody/report_nbody.txt) | [results/](nbody/results/) | [nbody_force.sv](nbody/hw/nbody_force.sv) |
 | [raytrace](raytrace/) | 1.50× | [report_raytrace.txt](raytrace/report_raytrace.txt) | [perf/](raytrace/perf/) | — |
+
+Nbody bonus (optional JIT): Numba **57.82×**.
 
 Repo: https://github.com/lavieled/benchmark-optimization-project
 
@@ -14,7 +16,8 @@ Repo: https://github.com/lavieled/benchmark-optimization-project
 ```
 nbody/
   run_benchmark.py              original pyperformance nbody
-  optimized/run_benchmark.py    SoA + Numba
+  optimized_cpython.py          MAIN opt: unrolled locals + sqrt, no JIT
+  optimized/run_benchmark.py    BONUS: SoA + Numba
   script_nbody.sh               venv, pyperf, optional perf/flamegraph
   verify_energy.py              same-physics check
   report_nbody.txt
@@ -35,22 +38,31 @@ Ignored: `__pycache__/`, `.venv/`, `.venv-dbg/`, `nbody/tools/`, `*.pdf`, `*.zip
 
 ## Nbody
 
-Five-body solar system (sun + Jupiter, Saturn, Uranus, Neptune), 20,000 Euler steps. Official time on QEMU CPython 3.10.12: **3.71 s → 64.1 ms (57.82×)**.
+Five-body solar system (sun + Jupiter, Saturn, Uranus, Neptune), 20,000 Euler steps.
+
+**Main (CPython only, QEMU 3.10.12):** 3.71 s → **2.49 s (1.49×)**.  
+`optimized_cpython.py` — 10 pairs unrolled, coordinates in locals, `mag = dt / (r2 * sqrt(r2))`.  
+Files: `nbody_cpython_compare.txt`, `nbody_cpython.json`, `nbody_cpython.svg`, `nbody_cpython_perf_report.txt`.
+
+**Bonus (Numba):** 3.71 s → 64.1 ms (57.82×).  
+`optimized/run_benchmark.py` — `nbody_compare.txt`, `nbody_optimized.json`, `nbody_optimized.svg`.
 
 From the repo root, inside the QEMU Ubuntu guest:
 
 ```bash
 chmod +x nbody/script_nbody.sh
-./nbody/script_nbody.sh
+ONLY_CPYTHON=1 RUN_PERF=1 ./nbody/script_nbody.sh
 ```
 
-Flame graphs and `perf report` (`python3-dbg` on the original):
+That refreshes only the CPython result set and does not overwrite the Numba files.
+
+Full original + Numba + CPython timing (overwrites Numba JSON if you let it):
 
 ```bash
 ITERS=20000 WORKERS=2 RUN_PERF=1 ./nbody/script_nbody.sh
 ```
 
-Time with regular `python3`, not `python3-dbg`.
+Time with regular `python3`, not `python3-dbg`. Profiles for original and CPython opt use `python3-dbg`.
 
 ```bash
 python3 nbody/verify_energy.py

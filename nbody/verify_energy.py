@@ -22,22 +22,33 @@ def load_mod(path: Path, name: str):
 def main() -> int:
     orig = load_mod(ROOT / "run_benchmark.py", "nbody_original")
     opt = load_mod(ROOT / "optimized" / "run_benchmark.py", "nbody_optimized")
+    cpy = load_mod(ROOT / "optimized_cpython.py", "nbody_cpython")
 
     orig.offset_momentum(orig.BODIES["sun"])
     opt.offset_momentum(opt.BODIES["sun"])
+    cpy.offset_momentum(cpy.BODIES["sun"])
 
     e0_o = orig.report_energy()
     e0_n = opt.report_energy()
+    e0_c = cpy.report_energy()
     orig.advance(DT, STEPS)
     opt.advance(DT, STEPS)
+    cpy.advance(DT, STEPS)
     e1_o = orig.report_energy()
     e1_n = opt.report_energy()
+    e1_c = cpy.report_energy()
 
-    d0 = abs(e0_o - e0_n)
-    d1 = abs(e1_o - e1_n)
-    print(f"energy after offset: original={e0_o:.12g}  optimized={e0_n:.12g}  |d|={d0:.3g}")
-    print(f"energy after {STEPS} steps: original={e1_o:.12g}  optimized={e1_n:.12g}  |d|={d1:.3g}")
-    if d0 > TOL or d1 > TOL:
+    print(f"energy after offset: original={e0_o:.12g}")
+    print(f"  numba=   {e0_n:.12g}  |d|={abs(e0_o - e0_n):.3g}")
+    print(f"  cpython= {e0_c:.12g}  |d|={abs(e0_o - e0_c):.3g}")
+    print(f"energy after {STEPS} steps: original={e1_o:.12g}")
+    print(f"  numba=   {e1_n:.12g}  |d|={abs(e1_o - e1_n):.3g}")
+    print(f"  cpython= {e1_c:.12g}  |d|={abs(e1_o - e1_c):.3g}")
+    worst = max(
+        abs(e0_o - e0_n), abs(e1_o - e1_n),
+        abs(e0_o - e0_c), abs(e1_o - e1_c),
+    )
+    if worst > TOL:
         print("FAIL: energy mismatch")
         return 1
     print("OK: energies match within", TOL)

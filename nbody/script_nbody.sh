@@ -8,6 +8,7 @@
 #
 # Optional env:
 #   ITERS=20000 WORKERS=2 RUN_PERF=1 ./nbody/script_nbody.sh
+#   ONLY_CPYTHON=1   # new CPython-only results only; do not overwrite Numba/original
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,6 +32,7 @@ WORKERS="${WORKERS:-2}"
 VALUES="${VALUES:-5}"
 WARMUPS="${WARMUPS:-1}"
 RUN_PERF="${RUN_PERF:-0}"
+ONLY_CPYTHON="${ONLY_CPYTHON:-0}"
 VENV="${VENV:-$ROOT/.venv}"
 VENV_DBG="${VENV_DBG:-$ROOT/.venv-dbg}"
 
@@ -46,24 +48,43 @@ pip install -q pyperf numpy numba
 
 PY_TIMING="$VENV/bin/python"
 
-echo "=== energy check (original vs optimized) ==="
+echo "=== energy check (original vs Numba vs CPython-only) ==="
 "$PY_TIMING" "$NBODY/verify_energy.py"
 
-echo "=== original nbody (pyperf) ==="
-"$PY_TIMING" -u "$NBODY/run_benchmark.py" \
-  -o "$RESULTS/nbody_original.json" \
+if [[ "$ONLY_CPYTHON" != "1" ]]; then
+  echo "=== original nbody (pyperf) ==="
+  "$PY_TIMING" -u "$NBODY/run_benchmark.py" \
+    -o "$RESULTS/nbody_original.json" \
+    -w "$WARMUPS" -n "$VALUES" -p "$WORKERS" \
+    --iterations "$ITERS"
+
+  echo "=== Numba optimized nbody (pyperf) ==="
+  "$PY_TIMING" -u "$NBODY/optimized/run_benchmark.py" \
+    -o "$RESULTS/nbody_optimized.json" \
+    -w "$WARMUPS" -n "$VALUES" -p "$WORKERS" \
+    --iterations "$ITERS"
+fi
+
+if [[ ! -f "$RESULTS/nbody_original.json" ]]; then
+  echo "ERROR: nbody/results/nbody_original.json missing (needed to compare)." >&2
+  exit 1
+fi
+
+echo "=== CPython-only optimized nbody (pyperf, no Numba) ==="
+"$PY_TIMING" -u "$NBODY/optimized_cpython.py" \
+  -o "$RESULTS/nbody_cpython.json" \
   -w "$WARMUPS" -n "$VALUES" -p "$WORKERS" \
   --iterations "$ITERS"
 
-echo "=== optimized nbody (pyperf) ==="
-"$PY_TIMING" -u "$NBODY/optimized/run_benchmark.py" \
-  -o "$RESULTS/nbody_optimized.json" \
-  -w "$WARMUPS" -n "$VALUES" -p "$WORKERS" \
-  --iterations "$ITERS"
+if [[ "$ONLY_CPYTHON" != "1" ]]; then
+  echo "=== compare (original vs Numba) ==="
+  pyperf compare_to "$RESULTS/nbody_original.json" "$RESULTS/nbody_optimized.json" \
+    | tee "$RESULTS/nbody_compare.txt"
+fi
 
-echo "=== compare ==="
-pyperf compare_to "$RESULTS/nbody_original.json" "$RESULTS/nbody_optimized.json" \
-  | tee "$RESULTS/nbody_compare.txt"
+echo "=== compare (original vs CPython-only) ==="
+pyperf compare_to "$RESULTS/nbody_original.json" "$RESULTS/nbody_cpython.json" \
+  | tee "$RESULTS/nbody_cpython_compare.txt"
 
 ensure_flamegraph() {
   if [[ -x "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" && -x "$FLAMEGRAPH_DIR/flamegraph.pl" ]]; then
@@ -136,18 +157,27 @@ if [[ "$RUN_PERF" == "1" ]]; then
       DBG_PY=python3-dbg
     fi
 
-    record_and_report "original python3-dbg" "$DBG_PY" \
-      "$NBODY/run_benchmark.py" \
-      "$RESULTS/nbody_original.perf.data" \
-      "$RESULTS/nbody_perf_report.txt" \
-      "$RESULTS/nbody_baseline.svg"
+    if [[ "$ONLY_CPYTHON" != "1" ]]; then
+      record_and_report "original python3-dbg" "$DBG_PY" \
+        "$NBODY/run_benchmark.py" \
+        "$RESULTS/nbody_original.perf.data" \
+        "$RESULTS/nbody_perf_report.txt" \
+        "$RESULTS/nbody_baseline.svg"
 
-    # Numba often fails on debug Python; profile optimized with regular python3.
-    record_and_report "optimized python3" "$PY_TIMING" \
-      "$NBODY/optimized/run_benchmark.py" \
-      "$RESULTS/nbody_optimized.perf.data" \
-      "$RESULTS/nbody_optimized_perf_report.txt" \
-      "$RESULTS/nbody_optimized.svg"
+      # Numba often fails on debug Python; profile with regular python3.
+      record_and_report "optimized numba python3" "$PY_TIMING" \
+        "$NBODY/optimized/run_benchmark.py" \
+        "$RESULTS/nbody_optimized.perf.data" \
+        "$RESULTS/nbody_optimized_perf_report.txt" \
+        "$RESULTS/nbody_optimized.svg"
+    fi
+
+    # Pure CPython: python3-dbg is valid and matches the course profile method.
+    record_and_report "optimized cpython python3-dbg" "$DBG_PY" \
+      "$NBODY/optimized_cpython.py" \
+      "$RESULTS/nbody_cpython.perf.data" \
+      "$RESULTS/nbody_cpython_perf_report.txt" \
+      "$RESULTS/nbody_cpython.svg"
   fi
 fi
 
