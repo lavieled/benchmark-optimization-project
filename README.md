@@ -4,8 +4,8 @@ Course work: analyze, profile, and optimize two [pyperformance](https://pyperfor
 
 | Benchmark | Owner | Status |
 |-----------|--------|--------|
-| [nbody](nbody/) | Lavie | optimized + QEMU report; run `script_nbody.sh` |
-| [raytrace](raytrace/) | partner | optimized + report + `perf/` |
+| [nbody](nbody/) | Lavie Lederman | optimized + QEMU report; run `script_nbody.sh` |
+| [raytrace](raytrace/) | Gal Micaheli | optimized + report + `perf/` |
 
 Private repo: https://github.com/lavieled/benchmark-optimization-project
 
