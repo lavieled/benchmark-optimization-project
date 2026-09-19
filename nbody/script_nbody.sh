@@ -7,8 +7,9 @@
 # Inside the QEMU Ubuntu guest (python3-dbg + perf for RUN_PERF=1).
 #
 # Optional env:
-#   ITERS=20000 WORKERS=2 RUN_PERF=1 ./nbody/script_nbody.sh
+#   ITERS=20000 RUN_PERF=1 ./nbody/script_nbody.sh
 #   ONLY_CPYTHON=1   # new CPython-only results only; do not overwrite Numba/original
+# Defaults match the official QEMU table: pyperf -w1 -n3 -p1.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -28,8 +29,8 @@ else
 fi
 
 ITERS="${ITERS:-20000}"
-WORKERS="${WORKERS:-2}"
-VALUES="${VALUES:-5}"
+WORKERS="${WORKERS:-1}"
+VALUES="${VALUES:-3}"
 WARMUPS="${WARMUPS:-1}"
 RUN_PERF="${RUN_PERF:-0}"
 ONLY_CPYTHON="${ONLY_CPYTHON:-0}"

@@ -59,7 +59,7 @@ That refreshes only the CPython result set and does not overwrite the Numba file
 Full original + Numba + CPython timing (overwrites Numba JSON if you let it):
 
 ```bash
-ITERS=20000 WORKERS=2 RUN_PERF=1 ./nbody/script_nbody.sh
+ITERS=20000 RUN_PERF=1 ./nbody/script_nbody.sh
 ```
 
 Time with regular `python3`, not `python3-dbg`. Profiles for original and CPython opt use `python3-dbg`.

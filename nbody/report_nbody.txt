@@ -1,14 +1,9 @@
-===============================================================================
-                       BENCHMARK OPTIMIZATION REPORT
-              Python Interpreter Overhead Reduction: bm_nbody
-===============================================================================
-
 1. BENCHMARK ANALYSIS
 -------------------------------------------------------------------------------
-This report covers the pyperformance n-body benchmark (bm_nbody). The
+This report covers the pyperformance n-body benchmark . The
 original program is nbody/run_benchmark.py.
 
-The workload is a tiny solar system: the sun plus Jupiter, Saturn, Uranus,
+The workload is a solar system: the sun plus Jupiter, Saturn, Uranus,
 and Neptune. Each timed run does three things: print the total energy,
 take 20,000 Euler steps with dt = 0.01, then print the energy again.
 
@@ -46,13 +41,10 @@ Main compare: nbody_original.json vs nbody_cpython.json
               -> nbody_cpython_compare.txt
 Bonus (Numba): nbody_optimized.json -> nbody_compare.txt
 
-Linux perf at 999 Hz with call graphs:
+Linux perf:
   original:  python3-dbg  -> nbody_baseline.svg, nbody_perf_report.txt
   main opt:  python3-dbg  -> nbody_cpython.svg, nbody_cpython_perf_report.txt
   bonus:     regular python3 (Numba cannot run under python3-dbg)
-
-We did not collect perf stat hardware counters. Evidence is pyperf,
-perf report, and the flame graphs.
 
 
 3. FLAME GRAPH & PROFILING ANALYSIS METHODOLOGY
@@ -61,19 +53,9 @@ Call stacks were sampled like this:
 
     perf record -F 999 -g -- python3-dbg -u nbody/run_benchmark.py
 
-Brendan Gregg's FlameGraph scripts turned that into SVG:
+ FlameGraph scripts turned that into SVG:
 
     perf script | stackcollapse-perf.pl | flamegraph.pl > nbody_baseline.svg
-
-The main optimized program used the same python3-dbg pipeline
-(nbody_cpython.svg). Both sides are the same debug interpreter, so
-symbol percentages can be compared.
-
-Flame graphs scale each run to 100% of that run. After a large JIT
-win, bar widths are not comparable across pictures. The official
-speedup is always pyperf mean and standard deviation. perf report
-explains why the CPython rewrite is faster (less list traffic, no
-pair iterator) and why Numba is a different kind of win (LLVM).
 
 
 4. DETECTED BOTTLENECKS FROM BASELINE PERF REPORT
@@ -91,7 +73,7 @@ gravity math.
      Every multiply, add, or ** builds a new Python float. PyFloat_FromDouble
      is 4.62%. Around each operation sit C helpers such as binary_op1
      (2.43%), PyNumber_Multiply (1.06%), and PyNumber_AsSsize_t (2.24%).
-     The actual floating-point helpers (binary_op1, float_mul, float_add)
+     The actual FP helpers (binary_op1, float_mul, float_add)
      add up to only 4.63%. Most samples are scaffolding, not FLOPs.
 
   3. Short-lived objects and list traffic
@@ -114,16 +96,14 @@ the original against both optimized programs.
 Main optimization (stays in CPython): nbody/optimized_cpython.py
 
   Replacing ** with sqrt alone, or a SoA of Python lists, was slower
-  or about 3%. What works at N=5 is the usual Benchmarks Game layout:
+  or about 3%. What works at N=5 is:
 
     1. Unroll the 10 pairs. No pair iterator, no nested unpack per step.
     2. Keep x/y/z/vx/vy/vz in local variables for the whole advance().
     3. mag = dt / (r2 * sqrt(r2)) instead of r2 ** (-1.5).
 
-  No NumPy, no Numba. This is the submitted "we still measure the
-  interpreter" result, same class of change as the raytrace refactor.
 
-Bonus (leaves the interpreter): nbody/optimized/run_benchmark.py
+Bonus: nbody/optimized/run_benchmark.py
 
   Structure-of-arrays float64 arrays, mag = dt * inv^3, Numba @njit
   on _advance and _energy, JIT warmed at import. Use this if a much
@@ -150,8 +130,6 @@ Coefficient of Var (CV)   | 5.9%                | 0.40%               | Stable
 Mean Speedup Ratio        | 1.00x               | 1.49x FASTER        | -32.9% time
 -------------------------------------------------------------------------------
 
-Mean 3.71 s +- 0.22 s -> 2.49 s +- 0.01 s (1.49x). The course asks for
-at least 7%. This path never leaves CPython.
 
 [B] Main result — same python3-dbg, baseline vs CPython opt
 -------------------------------------------------------------------------------
@@ -173,9 +151,7 @@ File: nbody/results/nbody_compare.txt
 Mean 3.71 s +- 0.22 s -> 64.1 ms +- 0.3 ms (57.82x).
 
 This compiles the pair loop. The bonus flame graph
-(nbody_optimized.svg) is regular python3, not python3-dbg, and shows
-libllvmlite.so. Quote pyperf, not that one-shot recording (it still
-pays some JIT). Staff can ignore this path if a JIT is out of scope.
+(nbody_optimized.svg) is regular python3.
 
 [D] Correctness (energy)
 -------------------------------------------------------------------------------
@@ -184,8 +160,6 @@ verify_energy.py, 1,000 steps, |d| < 1e-9:
   after offset:      original = CPython = Numba (CPython |d| ~ 3e-17)
   after 1,000 steps: |d| ~ 3e-16 (both optimized programs)
 
-Same physics. The speedup is the implementation, not a different
-integrator.
 
 
 7. HARDWARE ACCELERATION PROPOSAL
@@ -196,26 +170,18 @@ The useful floating-point work is the pairwise kick:
     v1 -= dr * m2 * mag
     v2 += dr * m1 * mag
 
-The CPython rewrite only removes interpreter work. Fast reciprocal
-square root and fused multiply-add are general floating-point ops.
+The CPython rewrite  removes interpreter work.
+Fast square root and fused multiply add are general FP ops.
 With only five bodies, a custom block helps if software can call it
 cheaply (from C), or if N becomes much larger.
 
 The SystemVerilog unit is nbody/hw/nbody_force.sv. It takes one pair,
-forms r2, seeds a Quake-style reciprocal square root, runs two Newton
-steps, builds inv^3, then writes both velocity increments. Ports are
-float32 with valid/ready handshakes. shortreal stands in for a real
-floating-point unit.
-
-Assumed clock is about 200 MHz:
+forms r2, does square root, runs two Newton
+steps, builds inv^3, then writes both velocity updates. Ports are
+float32 with valid/ready handshakes.
 
   inputs:  clk, rst_n, in_valid/ready, dx, dy, dz, m1, m2, dt
   outputs: out_valid/ready, dv1{x,y,z}, dv2{x,y,z}
-
-After a pair is accepted, the datapath takes 8 cycles (~40 ns). Ten
-pairs per step would be about 0.4 us if they were streamed. A single
-MMIO write per pair would spend most of that time on the call, not on
-arithmetic, unless there is DMA or a custom instruction.
 
 Two software uses:
   (A) MMIO, one pair at a time.
@@ -236,17 +202,16 @@ Two software uses:
 Trade-offs: another Newton iteration costs area and buys accuracy;
 SIMD means more ALUs; a higher clock needs more pipeline stages and
 power. MMIO for N = 5 is mostly overhead. C plus FRSQRT might be
-10-50x versus CPython. Versus the Numba bonus the gain is small until
-N grows.
+10-50x versus CPython.
 
 
 Conclusion
 -------------------------------------------------------------------------------
 Same 5-body problem and the same energy. The main result stays in
 CPython: unroll, locals, and dt/(r2*sqrt(r2)) turn 3.71 s into 2.49 s
-on QEMU (1.49x), above the 7% bar. python3-dbg shows list subscript
+on QEMU (1.49x). python3-dbg shows list subscript
 traffic essentially gone.
 
-Numba is a bonus (57.82x) if compiled kernels are allowed. The Verilog
+Numba is a bonus run (57.82x) to bypass compilation and interpeter overhead completly. The Verilog
 block is the same pairwise 1/r^3 kick in hardware.
 ===============================================================================
