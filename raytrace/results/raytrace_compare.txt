@@ -1,1 +1,1 @@
-Mean +- std dev: [raytrace_original] 806 ms +- 3 ms -> [raytrace_optimized] 567 ms +- 3 ms: 1.42x faster
+Mean +- std dev: [raytrace_original] 816 ms +- 3 ms -> [raytrace_optimized] 563 ms +- 4 ms: 1.45x faster
