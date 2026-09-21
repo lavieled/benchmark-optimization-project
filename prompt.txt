@@ -1,3 +1,6 @@
+===============================================================================
+                                     NBODY
+===============================================================================
 "clone a private repo named benchmark-optimization-project"
 "make a simple gitignore, skip venv and pycache and qemu images and perf.data"
 "copy the original pyperformance nbody and raytrace benchmarks into nbody/ and raytrace/"
@@ -49,4 +52,29 @@
 "should be 2-3 slides"
 "add inputs outputs block diagram mmio vs isa and trade-offs"
 
-"list propmts used for this project"
+"list prompts used for this project"
+
+===============================================================================
+                                    RAYTRACE
+===============================================================================
+"I need to run and optimize the raytrace benchmark from pyperformance. I want to start by setting up a virtual environment."
+
+"Explain this perf record output. Specifically, identify optimization opportunities."
+
+"How can I generate flame graphs?"
+
+"I need to write a project report as a txt file. These are the relevant project instructions given by the course staff:
+1. Benchmark Analysis
+2. Understand pyperformance
+3. Generate a Flame Graph
+4. Detect Bottlenecks
+5. Suggest Improvements
+6. Show Performance Improvements"
+
+"I need to prepare a 20-25 minute presentation on the project. The project includes 2 benchmark optimizations, one of which also has a section that optimizes performance using hardware. The hardware is supposed to be described using some HDL and presented as a block diagram. The other benchmark and the HW part was done by my partner."
+
+"Another requirement for the submission is a benchmark execution script. It should contain nvironment setup and dependency installation, benchmark execution using pyperformance or other profiling tools, flame graph and performance data generation, post-optimization benchmark execution with performance comparison."
+
+"I'm now writing the presentation in PowerPoint Web. I already have some slides written with placeholder bullet points. Guide me on how to make it look visually pleasing and academic design-wise."
+
+"How do I write an em dash in a GitHub README.md?"
