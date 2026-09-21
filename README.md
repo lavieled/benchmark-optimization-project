@@ -68,6 +68,10 @@ Time with regular `python3`, not `python3-dbg`. Profiles for original and CPytho
 python3 nbody/verify_energy.py
 ```
 
+## Hardware acceleration
+
+The proposed accelerator targets the pairwise `dt / r^3` velocity kick left in the nbody inner loop. It is written in SystemVerilog as `nbody/hw/nbody_force.sv`: float32 valid/ready ports, an rsqrt seed with two Newton steps, an 8-cycle FSM. The interface, block diagram, FSM, software integration and trade-offs are in [nbody/hw/README.md](nbody/hw/README.md), with more detail in the hardware section of [report_nbody.txt](nbody/report_nbody.txt).
+
 ## Raytrace
 
 Pure-Python ray tracer (stdlib `math` only). The optimized program inlines vector math, drops defensive type checks, and allocates fewer temporary `Vector`/`Point` objects. Official figures in [report_raytrace.txt](raytrace/report_raytrace.txt): **1.50×** (~33% less time; `perf stat` wall clock 189.83 s → 128.59 s).
