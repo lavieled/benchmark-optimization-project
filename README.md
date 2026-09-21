@@ -83,6 +83,8 @@ WIDTH=200 HEIGHT=200 RUN_PERF=0 RUN_STAT=1 ./raytrace/script_raytrace.sh
 ```
 
 Where `WIDTH` and `HEIGHT` are the image width and height in pixels, and profiling parameters are
-`RUN_PERF` --- Profile under `python3-dbg`, produce Flamegraphs, and run `perf stat`. Default is `0`.
-`RUN_STAT` --- Profile with `perf stat` (only relevant when `RUN_PERF=0`). Default is `0`.
+
+`RUN_PERF` -- profile under `python3-dbg`, produce Flamegraphs, and run `perf stat`. Default is `0`.
+
+`RUN_STAT` -- profile with `perf stat` (only relevant when `RUN_PERF=0`). Default is `0`.
 
