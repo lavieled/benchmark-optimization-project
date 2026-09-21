@@ -2,6 +2,7 @@ __pycache__/
 .venv/
 .venv-dbg/
 nbody/tools/
+raytrace/tools/
 *.pdf
 *.zip
 *.perf.data
