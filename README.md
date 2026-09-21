@@ -25,8 +25,9 @@ nbody/
   results/                      pyperf JSON, compare, perf report, SVG
 
 raytrace/
-  run_benchmark_optimized.py    optimized raytrace benchmark
-  run_benchmark_original.py     original raytrace benchmark
+  run_benchmark_original.py     original pyperformance raytrace
+  run_benchmark_optimized.py    optimized: inlined vector math, fewer temporaries
+  script_raytrace.sh            venv, pyperf, perf stat, optional perf/flamegraph
   report_raytrace.txt
   results/                      pyperf JSON, flame graphs, perf report, perf stat
 
@@ -34,7 +35,6 @@ prompt.txt                      AI prompts used on this project
 .gitignore
 ```
 
-Ignored: `__pycache__/`, `.venv/`, `.venv-dbg/`, `nbody/tools/`, `*.pdf`, `*.zip`, `*.perf.data`, QEMU `*.img`. See `.gitignore`.
 
 ## Nbody
 
@@ -72,10 +72,10 @@ python3 nbody/verify_energy.py
 
 Pure-Python ray tracer (stdlib `math` only). The optimized program inlines vector math, drops defensive type checks, and allocates fewer temporary `Vector`/`Point` objects. Official figures in [report_raytrace.txt](raytrace/report_raytrace.txt): **1.50×** (~33% less time; `perf stat` wall clock 189.83 s → 128.59 s).
 
-Sources, report, and profiles are under `raytrace/` as committed on `main`.
+Sources, script, report, and results are under `raytrace/`.
 
 ### Profiling
-From the repo root, inside the QEMU Ubuntu quest, run (for example):
+From the repo root, inside the QEMU Ubuntu guest, run (for example):
 
 ```bash
 chmod +x raytrace/script_raytrace.sh

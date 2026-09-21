@@ -170,7 +170,7 @@ The useful floating-point work is the pairwise kick:
     v1 -= dr * m2 * mag
     v2 += dr * m1 * mag
 
-The CPython rewrite  removes interpreter work.
+The CPython rewrite removes interpreter work.
 Fast square root and fused multiply add are general FP ops.
 With only five bodies, a custom block helps if software can call it
 cheaply (from C), or if N becomes much larger.
@@ -212,6 +212,6 @@ CPython: unroll, locals, and dt/(r2*sqrt(r2)) turn 3.71 s into 2.49 s
 on QEMU (1.49x). python3-dbg shows list subscript
 traffic essentially gone.
 
-Numba is a bonus run (57.82x) to bypass compilation and interpeter overhead completly. The Verilog
+Numba is a bonus run (57.82x) to bypass compilation and interpreter overhead completely. The Verilog
 block is the same pairwise 1/r^3 kick in hardware.
 ===============================================================================
