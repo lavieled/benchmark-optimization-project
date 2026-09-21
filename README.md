@@ -5,7 +5,7 @@ Analyze, profile, and optimize two [pyperformance](https://pyperformance.readthe
 | Benchmark | Main speedup | Report | Evidence | Hardware |
 |-----------|--------------|--------|----------|----------|
 | [nbody](nbody/) | **1.49×** (CPython) | [report_nbody.txt](nbody/report_nbody.txt) | [results/](nbody/results/) | [nbody_force.sv](nbody/hw/nbody_force.sv) |
-| [raytrace](raytrace/) | 1.50× | [report_raytrace.txt](raytrace/report_raytrace.txt) | [perf/](raytrace/perf/) | — |
+| [raytrace](raytrace/) | **1.50×** | [report_raytrace.txt](raytrace/report_raytrace.txt) | [results/](raytrace/results/) | — |
 
 Nbody bonus (optional JIT): Numba **57.82×**.
 
@@ -25,10 +25,10 @@ nbody/
   results/                      pyperf JSON, compare, perf report, SVG
 
 raytrace/
-  run_benchmark.py              original pyperformance raytrace
-  run_benchmark_optimized_refactor.py
+  run_benchmark_optimized.py    optimized raytrace benchmark
+  run_benchmark_original.py     original raytrace benchmark
   report_raytrace.txt
-  perf/                         pyperf JSON, flame graphs, perf report, perf stat
+  results/                      pyperf JSON, flame graphs, perf report, perf stat
 
 prompt.txt                      AI prompts used on this project
 .gitignore
@@ -73,3 +73,16 @@ python3 nbody/verify_energy.py
 Pure-Python ray tracer (stdlib `math` only). The optimized program inlines vector math, drops defensive type checks, and allocates fewer temporary `Vector`/`Point` objects. Official figures in [report_raytrace.txt](raytrace/report_raytrace.txt): **1.50×** (~33% less time; `perf stat` wall clock 189.83 s → 128.59 s).
 
 Sources, report, and profiles are under `raytrace/` as committed on `main`.
+
+### Profiling
+From the repo root, inside the QEMU Ubuntu quest, run (for example):
+
+```bash
+chmod +x raytrace/script_raytrace.sh
+WIDTH=200 HEIGHT=200 RUN_PERF=0 RUN_STAT=1 ./raytrace/script_raytrace.sh
+```
+
+Where `WIDTH` and `HEIGHT` are the image width and height in pixels, and profiling parameters are
+`RUN_PERF` --- Profile under `python3-dbg`, produce Flamegraphs, and run `perf stat`. Default is `0`.
+`RUN_STAT` --- Profile with `perf stat` (only relevant when `RUN_PERF=0`). Default is `0`.
+
