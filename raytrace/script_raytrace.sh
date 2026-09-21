@@ -6,9 +6,9 @@
 #   ./script_raytrace.sh
 #
 # Optional environment variables:
-#   RUN_STAT=1 ./script_raytrace.sh                  # Run pyperf + perf stat comparison table
-#   RUN_PERF=1 ./script_raytrace.sh                  # Run pyperf + perf stat + flamegraphs
-#   ITERS=10 WORKERS=1 RUN_STAT=1 ./script_raytrace.sh
+#   RUN_STAT=1 ./script_raytrace.sh                   # Run pyperf + perf stat comparison table
+#   RUN_PERF=1 ./script_raytrace.sh                   # Run pyperf + perf stat + flamegraphs
+#   WIDTH=200 HEIGHT=200 RUN_STAT=1 ./script_raytrace.sh
 
 set -euo pipefail
 
@@ -30,10 +30,11 @@ else
 fi
 
 # Configuration parameters with sensible defaults
-ITERS="${ITERS:-1}"
 WORKERS="${WORKERS:-2}"
 VALUES="${VALUES:-5}"
 WARMUPS="${WARMUPS:-1}"
+WIDTH="${WIDTH:-100}"       # Default width (passed down to run_benchmark_*.py)
+HEIGHT="${HEIGHT:-100}"     # Default height (passed down to run_benchmark_*.py)
 RUN_STAT="${RUN_STAT:-0}"
 RUN_PERF="${RUN_PERF:-0}"
 VENV="${VENV:-$RAYTRACE/.venv}"
@@ -65,19 +66,19 @@ PY_TIMING="$VENV/bin/python"
 # ------------------------------------------------------------------------------
 # 2. Pyperf Benchmark Execution
 # ------------------------------------------------------------------------------
-echo "=== Original raytrace benchmark (pyperf) ==="
+echo "=== Original raytrace benchmark (pyperf) [${WIDTH}x${HEIGHT}] ==="
 "$PY_TIMING" -u "$RAYTRACE/run_benchmark_original.py" \
   --quiet \
   -o "$RESULTS/raytrace_original.json" \
   -w "$WARMUPS" -n "$VALUES" -p "$WORKERS" \
-  --loops "$ITERS"
+  --width "$WIDTH" --height "$HEIGHT"
 
-echo "=== Refactored/Optimized raytrace benchmark (pyperf) ==="
+echo "=== Refactored/Optimized raytrace benchmark (pyperf) [${WIDTH}x${HEIGHT}] ==="
 "$PY_TIMING" -u "$RAYTRACE/run_benchmark_optimized.py" \
   --quiet \
   -o "$RESULTS/raytrace_optimized.json" \
   -w "$WARMUPS" -n "$VALUES" -p "$WORKERS" \
-  --loops "$ITERS"
+  --width "$WIDTH" --height "$HEIGHT"
 
 if [[ ! -f "$RESULTS/raytrace_original.json" || ! -f "$RESULTS/raytrace_optimized.json" ]]; then
   echo "ERROR: Benchmark JSON outputs missing. Cannot proceed with comparison." >&2
@@ -95,7 +96,7 @@ if [[ "$RUN_STAT" == "1" ]]; then
   if ! command -v perf >/dev/null 2>&1; then
     echo "WARN: Linux perf tool not found; skipping perf stat stage" >&2
   else
-    echo "=== Running perf stat profiling ==="
+    echo "=== Running perf stat profiling [${WIDTH}x${HEIGHT}] ==="
     
     STAT_RAW_ORIG="$RESULTS/.perf_stat_orig.tmp"
     STAT_RAW_OPT="$RESULTS/.perf_stat_opt.tmp"
@@ -103,13 +104,15 @@ if [[ "$RUN_STAT" == "1" ]]; then
 
     EVENTS="task-clock,context-switches,page-faults,cycles,instructions,branches,branch-misses"
 
-    # Run perf stat on Original (--quiet added here)
+    # Run perf stat on Original
     perf stat -x ';' -e "$EVENTS" -o "$STAT_RAW_ORIG" -- \
-      "$PY_TIMING" -u "$RAYTRACE/run_benchmark_original.py" --quiet -w0 -n1 -p1 --loops "$ITERS" >/dev/null 2>&1 || true
+      "$PY_TIMING" -u "$RAYTRACE/run_benchmark_original.py" --quiet -w0 -n1 -p1 \
+      --width "$WIDTH" --height "$HEIGHT" >/dev/null 2>&1 || true
 
-    # Run perf stat on Optimized (--quiet added here)
+    # Run perf stat on Optimized
     perf stat -x ';' -e "$EVENTS" -o "$STAT_RAW_OPT" -- \
-      "$PY_TIMING" -u "$RAYTRACE/run_benchmark_optimized.py" --quiet -w0 -n1 -p1 --loops "$ITERS" >/dev/null 2>&1 || true
+      "$PY_TIMING" -u "$RAYTRACE/run_benchmark_optimized.py" --quiet -w0 -n1 -p1 \
+      --width "$WIDTH" --height "$HEIGHT" >/dev/null 2>&1 || true
 
     # Generate Comparison Table via Python parser script
     "$PY_TIMING" - "$STAT_RAW_ORIG" "$STAT_RAW_OPT" "$STAT_TABLE" << 'EOF'
@@ -217,12 +220,13 @@ record_and_report() {
   local report_txt="$5"
   local svg_out="$6"
 
-  echo "=== perf record ($label) ==="
+  echo "=== perf record ($label) [${WIDTH}x${HEIGHT}] ==="
   rm -f "$perf_data"
   
   # Redirect perf stderr to /dev/null to hide kptr_restrict / bpf noise
   perf record -F 999 -g -e cpu-clock -o "$perf_data" -- \
-    "$interpreter" -u "$bench" --quiet -w0 -n1 -p1 --loops "$ITERS" 2>/dev/null || true
+    "$interpreter" -u "$bench" --quiet -w0 -n1 -p1 \
+    --width "$WIDTH" --height "$HEIGHT" 2>/dev/null || true
 
   if [[ ! -s "$perf_data" ]]; then
     echo "ERROR: $perf_data was not created or is empty!" >&2
@@ -237,7 +241,7 @@ record_and_report() {
     
     if perf script -i "$perf_data" 2>/dev/null \
       | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" \
-      | "$FLAMEGRAPH_DIR/flamegraph.pl" --title "raytrace $label" > "$svg_out"; then
+      | "$FLAMEGRAPH_DIR/flamegraph.pl" --title "raytrace $label (${WIDTH}x${HEIGHT})" > "$svg_out"; then
       
       if [[ -s "$svg_out" ]]; then
         echo "SUCCESS: Saved FlameGraph to $svg_out"
