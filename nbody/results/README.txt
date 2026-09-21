@@ -14,5 +14,3 @@ Bonus (Numba, 57.82x):
   nbody_optimized.json
   nbody_optimized.svg
   nbody_optimized_perf_report.txt
-
-Do not commit *.perf.data.
